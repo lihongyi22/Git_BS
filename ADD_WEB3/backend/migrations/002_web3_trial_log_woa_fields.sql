@@ -1,0 +1,17 @@
+ALTER TABLE trial_logs ADD COLUMN condition_code TEXT;
+ALTER TABLE trial_logs ADD COLUMN module_number INTEGER;
+ALTER TABLE trial_logs ADD COLUMN trial_number_in_module INTEGER;
+ALTER TABLE trial_logs ADD COLUMN global_trial_number INTEGER;
+ALTER TABLE trial_logs ADD COLUMN instance_id INTEGER;
+ALTER TABLE trial_logs ADD COLUMN option_order_presented TEXT;
+ALTER TABLE trial_logs ADD COLUMN initial_choice_score REAL;
+ALTER TABLE trial_logs ADD COLUMN confidence_before INTEGER;
+ALTER TABLE trial_logs ADD COLUMN advice_shown_at TEXT;
+ALTER TABLE trial_logs ADD COLUMN advice_recommendation TEXT;
+ALTER TABLE trial_logs ADD COLUMN advice_recommendation_score REAL;
+ALTER TABLE trial_logs ADD COLUMN final_choice_score REAL;
+ALTER TABLE trial_logs ADD COLUMN confidence_after INTEGER;
+ALTER TABLE trial_logs ADD COLUMN trial_duration_seconds REAL;
+ALTER TABLE trial_logs ADD COLUMN delta_confidence REAL;
+ALTER TABLE trial_logs ADD COLUMN woa_score REAL;
+ALTER TABLE trial_logs ADD COLUMN woa_null_reason TEXT;
