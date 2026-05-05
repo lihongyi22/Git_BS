@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>T2DM 决策实验平台 WEB2</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260504a" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="topbar-meta">
+          <div class="topbar-meta-label" id="subjectId">被试：-</div>
+          <div class="topbar-meta-info" id="moduleInfo">准备中</div>
+        </div>
+        <div class="topbar-condition" id="conditionDisplay">条件中...</div>
+        <nav class="tabs">
+          <button data-view="home">首页</button>
+          <button data-view="experiment">实验</button>
+          <button data-view="records">记录</button>
+          <button data-view="scales">量表</button>
+          <button data-view="notice">须知</button>
+        </nav>
+      </header>
+
+      <main class="viewport">
+        <!-- 首页 -->
+        <section class="view" id="view-home"></section>
+
+        <!-- 实验视图 -->
+        <section class="view hidden" id="view-experiment"></section>
+
+        <!-- 记录视图 -->
+        <section class="view hidden" id="view-records">
+          <div class="card">
+            <h3>实验记录</h3>
+            <div id="recordsList"></div>
+          </div>
+        </section>
+
+        <!-- 量表视图 -->
+        <section class="view hidden" id="view-scales"></section>
+
+        <!-- 须知视图 -->
+        <section class="view hidden" id="view-notice">
+          <div class="card">
+            <h3>实验须知</h3>
+            <p>本实验用于研究血糖管理决策制定过程。请在完成所有任务后，填写后续问卷。</p>
+            <p><strong>任务流程：</strong></p>
+            <ol>
+              <li>填写基础信息量表</li>
+              <li>开始实验训练和真实实验</li>
+              <li>每个任务包含两个决策阶段</li>
+              <li>完成所有任务后填写最终量表</li>
+            </ol>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js?v=20260504b"></script>
+  </body>
+</html>
