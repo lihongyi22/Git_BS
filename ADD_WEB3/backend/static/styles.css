@@ -8,7 +8,7 @@
   --muted: #64748b;
   --light: #f1f5f9;
   --border: #cbd5e1;
-  --bg: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  --bg: #ffffff;
 }
 
 * { box-sizing: border-box; }
@@ -20,7 +20,7 @@ body {
   background: var(--bg);
   height: 100vh;
   overflow: hidden;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.6;
 }
 
@@ -46,17 +46,17 @@ body {
 .topbar-meta {
   display: grid;
   gap: 4px;
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .topbar-meta-label {
   font-weight: bold;
   color: var(--primary);
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .topbar-meta-info {
-  font-size: 14px;
+  font-size: 18px;
   color: var(--muted);
 }
 
@@ -89,7 +89,7 @@ body {
   color: var(--ink);
   border-radius: 8px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   transition: all 0.2s;
 }
@@ -139,21 +139,21 @@ body {
 
 .card h3 {
   margin: 0 0 12px;
-  font-size: 22px;
+  font-size: 28px;
   color: var(--primary);
   border-bottom: 2px solid var(--light);
   padding-bottom: 12px;
 }
 
 .card p {
-  font-size: 16px;
+  font-size: 20px;
   line-height: 1.8;
   margin: 8px 0;
 }
 
 .muted {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 18px;
 }
 
 input, select, textarea {
@@ -161,7 +161,7 @@ input, select, textarea {
   border: 2px solid var(--border);
   border-radius: 8px;
   padding: 12px;
-  font-size: 16px;
+  font-size: 20px;
   margin: 8px 0;
   font-family: inherit;
   transition: border-color 0.2s;
@@ -178,7 +178,7 @@ button {
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   transition: all 0.2s;
 }
@@ -219,8 +219,9 @@ button {
 .exp-layout {
   height: 100%;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-rows: minmax(0, 1.5fr) auto;
+  gap: 10px;
+  align-items: start;
 }
 
 .exp-top {
@@ -241,7 +242,7 @@ button {
 
 .panel h3 {
   margin: 0 0 16px;
-  font-size: 20px;
+  font-size: 26px;
   color: var(--primary);
   border-bottom: 2px solid var(--light);
   padding-bottom: 12px;
@@ -255,32 +256,44 @@ button {
 }
 
 .glucose-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: end;
+  gap: 18px;
+  margin-bottom: 4px;
 }
 
-.glucose-header-left {
+.glucose-value-block {
   display: grid;
   gap: 2px;
-  min-width: 170px;
+  min-width: 180px;
+}
+
+.glucose-value-label {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
 }
 
 .glucose-now {
-  font-size: 52px;
+  font-size: 66px;
   line-height: 1;
   font-weight: 800;
   color: var(--danger);
 }
 
+.glucose-now.current {
+  color: var(--ink);
+}
+
 .glucose-unit {
-  font-size: 24px;
+  font-size: 28px;
   color: var(--muted);
 }
 
 .glucose-meta {
-  font-size: 13px;
+  font-size: 18px;
   color: var(--muted);
   line-height: 1.4;
 }
@@ -288,9 +301,13 @@ button {
 .glucose-predictions {
   display: flex;
   gap: 20px;
-  font-size: 18px;
+  font-size: 20px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.glucose-predictions.top-row {
+  align-items: end;
 }
 
 .pred-item {
@@ -301,24 +318,24 @@ button {
 
 .pred-label {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .pred-value {
-  font-size: 36px;
+  font-size: 44px;
   font-weight: 700;
-  color: var(--warn);
+  color: #eab308;
 }
 
 .glucose-summary-text {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.4;
 }
 
 .glucose-summary-text.strong {
-  font-size: 14px;
+  font-size: 18px;
   color: var(--ink);
   font-weight: 700;
 }
@@ -329,7 +346,7 @@ button {
   padding: 16px;
   border: 2px solid var(--light);
   border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+  background: #ffffff;
 }
 
 .glucose-chart-header {
@@ -341,19 +358,19 @@ button {
 }
 
 .glucose-chart-title {
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 800;
   color: var(--primary);
 }
 
 .glucose-chart-subtitle {
-  font-size: 13px;
+  font-size: 17px;
   color: var(--muted);
 }
 
 .glucose-axis-title {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
 }
 
@@ -361,7 +378,7 @@ button {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
   align-items: center;
 }
@@ -392,8 +409,7 @@ button {
 }
 
 .legend-swatch.region-history { background: rgba(14, 165, 233, 0.65); }
-.legend-swatch.region-decision { background: rgba(245, 158, 11, 0.7); }
-.legend-swatch.region-future { background: rgba(16, 185, 129, 0.68); }
+.legend-swatch.region-future { background: rgba(245, 158, 11, 0.76); }
 
 .chart-container {
   height: 100%;
@@ -412,7 +428,7 @@ button {
   border: 2px solid var(--light);
   border-radius: 8px;
   padding: 20px;
-  background: #fafbff;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -437,12 +453,12 @@ button {
   min-height: 220px;
 }
 
-.point-history { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
-.point-meal { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
-.point-decision { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
-.point-future { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
-.point-outcome-30 { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
-.point-outcome-60 { fill: rgba(15, 23, 42, 0.84); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
+.point-history { fill: rgba(30, 64, 175, 0.86); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
+.point-meal { fill: rgba(30, 64, 175, 0.86); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
+.point-decision { fill: rgba(15, 23, 42, 0.94); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
+.point-future { fill: rgba(245, 158, 11, 0.88); stroke: rgba(245, 158, 11, 0.92); stroke-width: 1.8; stroke-dasharray: 5 4; }
+.point-outcome-30 { fill: rgba(30, 64, 175, 0.86); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
+.point-outcome-60 { fill: rgba(245, 158, 11, 0.88); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
 
 .glucose-region {
   pointer-events: none;
@@ -450,18 +466,18 @@ button {
   stroke-width: 1;
 }
 
-.glucose-region-history { fill: rgba(14, 165, 233, 0.10); }
-.glucose-region-decision { fill: rgba(245, 158, 11, 0.14); }
-.glucose-region-future { fill: rgba(16, 185, 129, 0.10); }
+.glucose-region-history { fill: rgba(14, 165, 233, 0.18); }
+.glucose-region-decision { fill: rgba(14, 165, 233, 0.18); }
+.glucose-region-future { fill: rgba(245, 158, 11, 0.18); }
 
 .glucose-point-label {
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 800;
   fill: var(--muted);
 }
 
 .glucose-point-state {
-  font-size: 10px;
+  font-size: 15px;
   fill: var(--muted);
 }
 
@@ -480,7 +496,7 @@ button {
 }
 
 .glucose-summary-card.accent-card {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(30, 64, 175, 0.08));
+  background: #ffffff;
   border-color: rgba(14, 165, 233, 0.24);
 }
 
@@ -558,7 +574,7 @@ button {
 }
 
 .advice-title {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--primary);
   border-bottom: 2px solid var(--light);
@@ -627,7 +643,7 @@ button {
 }
 
 .advice-text {
-  font-size: 18px;
+  font-size: 24px;
   line-height: 1.8;
   padding: 16px;
   background: var(--light);
@@ -644,25 +660,33 @@ button {
 
 /* ===== 决策区域 ===== */
 .decision-panel {
-  height: auto;
   display: grid;
   grid-template-rows: auto auto auto auto;
-  gap: 8px;
+  gap: 2px;
+  width: 100%;
+  min-height: auto;
+  overflow: visible;
+  padding-bottom: 4px;
 }
 
 .decision-title {
-  font-size: 18px;
+  font-size: 0;
   font-weight: 700;
   color: var(--primary);
-  border-bottom: 2px solid var(--light);
-  padding-bottom: 8px;
+  border-bottom: none;
+  padding: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  line-height: 0;
+  display: none;
 }
 
 .choice-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  gap: 5px;
   height: auto;
+  margin-top: 1px;
 }
 
 .choice-grid.locked {
@@ -671,8 +695,8 @@ button {
 }
 
 .choice-btn {
-  min-height: 68px;
-  font-size: 18px;
+  min-height: 100px;
+  font-size: 32px;
   font-weight: 700;
   padding: 10px 8px;
   border: 2px solid var(--border);
@@ -685,8 +709,18 @@ button {
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 4px;
+  gap: 3px;
   transition: all 0.2s;
+  line-height: 1.2;
+}
+
+.choice-btn > div:first-child {
+  font-size: 1.15em;
+  line-height: 1.1;
+}
+
+.choice-btn > div:last-child {
+  font-size: 1.1em;
   line-height: 1.2;
 }
 
@@ -716,7 +750,7 @@ button {
 }
 
 .training-layout .survey-header h2 {
-  font-size: 22px;
+  font-size: 30px;
 }
 
 .training-layout .survey-content {
@@ -734,13 +768,22 @@ button {
 
 .training-layout .choice-grid {
   gap: 8px;
-  margin-bottom: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
 }
 
 .training-layout .choice-btn {
-  min-height: 58px;
-  font-size: 16px;
-  padding: 8px 6px;
+  min-height: 78px;
+  font-size: 24px;
+  padding: 6px 6px;
+}
+
+.training-layout .choice-btn > div:first-child {
+  font-size: 0.95em;
+}
+
+.training-layout .choice-btn > div:last-child {
+  font-size: 1.05em;
 }
 
 .training-layout .confidence-box {
@@ -748,12 +791,12 @@ button {
 }
 
 .training-layout .conf-btn {
-  min-height: 54px;
-  padding: 6px;
+  min-height: 72px;
+  padding: 8px;
 }
 
 .training-layout .conf-btn .conf-value {
-  font-size: 24px;
+  font-size: 30px;
 }
 
 .rest-countdown {
@@ -842,7 +885,7 @@ button {
 .sequence-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .sequence-table th,
@@ -865,35 +908,39 @@ button {
 
 /* ===== 信心评分区 ===== */
 .confidence-box {
-  padding: 12px;
+  padding: 6px 8px;
   background: var(--light);
-  border-radius: 8px;
+  border-radius: 6px;
   border-left: 4px solid var(--accent);
+  margin-top: 1px;
 }
 
 .confidence-title {
   font-weight: 700;
-  font-size: 17px;
+  font-size: 28px;
   margin-bottom: 4px;
   color: var(--primary);
+  line-height: 1.2;
 }
 
 .confidence-label {
   font-weight: 600;
-  font-size: 18px;
-  margin-bottom: 12px;
+  font-size: 20px;
+  margin-bottom: 2px;
   color: var(--primary);
+  line-height: 1;
 }
 
 .confidence-buttons {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  gap: 5px;
+  margin-top: 3px;
 }
 
 .conf-btn {
-  padding: 8px 8px;
-  font-size: 16px;
+  padding: 12px 8px;
+  font-size: 24px;
   font-weight: 700;
   border: 2px solid var(--border);
   background: white;
@@ -905,19 +952,22 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 66px;
+  gap: 4px;
+  min-height: 88px;
 }
 
 .conf-btn .conf-value {
-  font-size: 26px;
+  font-size: 40px;
   font-weight: 800;
+  line-height: 1;
 }
 
 .conf-btn .conf-label {
-  font-size: 12px;
+  font-size: 22px;
   color: var(--muted);
   font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.1;
 }
 
 .conf-btn:hover {
@@ -950,8 +1000,8 @@ button {
 .button-group {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 1px;
 }
 
 .button-group button {
@@ -989,14 +1039,14 @@ button {
 
 .survey-header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 30px;
   color: var(--primary);
   border-bottom: 3px solid var(--accent);
   padding-bottom: 8px;
 }
 
 .survey-section-marker {
-  font-size: 16px;
+  font-size: 20px;
   color: var(--muted);
   margin-top: 8px;
 }
@@ -1022,7 +1072,7 @@ button {
 }
 
 .section-title {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--primary);
   margin-bottom: 20px;
@@ -1039,17 +1089,18 @@ button {
 }
 
 .question-text {
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--ink);
   margin-bottom: 12px;
 }
 
 .scale-hint {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--muted);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   font-style: italic;
+  line-height: 1.2;
 }
 
 .scale-buttons {
@@ -1060,7 +1111,7 @@ button {
 
 .scale-btn {
   padding: 16px 8px;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
   border: 2px solid var(--border);
   background: white;
@@ -1077,12 +1128,12 @@ button {
 }
 
 .scale-btn .score {
-  font-size: 24px;
+  font-size: 32px;
   font-weight: 800;
 }
 
 .scale-btn .meaning {
-  font-size: 12px;
+  font-size: 16px;
   color: var(--muted);
   line-height: 1.2;
   text-align: center;
@@ -1136,7 +1187,7 @@ button {
 }
 
 .condition-chip-title {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -1144,7 +1195,7 @@ button {
 }
 
 .condition-chip-sub {
-  font-size: 11px;
+  font-size: 15px;
   color: var(--muted);
   line-height: 1.2;
 }
@@ -1171,7 +1222,7 @@ button {
 }
 
 .condition-menu-heading {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--primary);
   text-transform: uppercase;
@@ -1187,7 +1238,7 @@ button {
   border-radius: 8px;
   background: #f8fafc;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.45;
 }
 
@@ -1207,7 +1258,7 @@ button {
 }
 
 .task-scale-editor label {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--primary);
 }
@@ -1218,7 +1269,7 @@ button {
   min-height: 240px;
   resize: vertical;
   font-family: Consolas, "Courier New", monospace;
-  font-size: 14px;
+  font-size: 18px;
   padding: 12px;
   border: 2px solid var(--border);
   border-radius: 8px;

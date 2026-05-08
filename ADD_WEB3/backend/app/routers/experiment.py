@@ -7,8 +7,9 @@ from fastapi import APIRouter, HTTPException
 
 from app.database import get_conn
 from app.schemas import RestCompleteIn, TrainingCompleteIn, TrialLogIn, TrialLogOut, TrialOut
-from app.services.doe import ACTION_OPTIONS, action_quality, advice_text, calculate_woa, condition_display_name
+from app.services.doe import ACTION_OPTIONS, action_quality, advice_text, build_glucose_story, calculate_woa, condition_display_name
 from app.services.media import resolve_media_urls
+from app.services.glucose_story import build_glucose_story_from_extended_data
 
 router = APIRouter(prefix="/api/experiment", tags=["experiment"])
 
@@ -110,6 +111,9 @@ def get_next_trial(subject_id: str) -> TrialOut:
 
     glucose_series = json.loads(trial["glucose_series_json"])
     glucose_story = json.loads(trial["glucose_outcome_json"])
+    if len(glucose_series) != 14 or glucose_story.get("glucose_axis", {}).get("decision_minute") != 0:
+        glucose_story = build_glucose_story(trial["scenario_type"], subject_id, trial["global_trial_number"], trial["instance_id"])
+        glucose_series = glucose_story["glucose_series"]
     action_by_code = {item["code"]: item for item in ACTION_OPTIONS}
     ordered_actions = [action_by_code[code] for code in option_codes]
     audio_url, video_url = resolve_media_urls(trial["condition_id"], trial["condition_media"])
@@ -133,9 +137,9 @@ def get_next_trial(subject_id: str) -> TrialOut:
         glucose_profile_key=trial["glucose_profile_key"],
         glucose_trend_label=trial["glucose_trend_label"],
         glucose_variant_index=trial["glucose_variant_index"],
-        trigger_glucose=trial["trigger_glucose"],
-        glucose_30=trial["glucose_30"],
-        glucose_60=trial["glucose_60"],
+        trigger_glucose=glucose_story["trigger_glucose"],
+        glucose_30=glucose_story["glucose_30"],
+        glucose_60=glucose_story["glucose_60"],
         glucose_series=glucose_series,
         glucose_axis=glucose_story["glucose_axis"],
         glucose_events=glucose_story["glucose_events"],
@@ -271,3 +275,38 @@ def log_trial(payload: TrialLogIn) -> TrialLogOut:
         confidence_delta=confidence_delta,
         quality_delta=quality_delta,
     )
+
+
+@router.get("/{subject_id}/{trial_index}/glucose-outcome/{action_code}/{sample_index}")
+def get_glucose_outcome(subject_id: str, trial_index: int, action_code: str, sample_index: int) -> dict:
+    """Load extended glucose data (30 points) for a specific action option.
+    
+    Args:
+        subject_id: Subject ID
+        trial_index: Trial index
+        action_code: Action code (WALK_1KM, WALK_2KM, RUN_1KM, RUN_2KM, NONE)
+        sample_index: Sample index (0-3 for each scenario, only use 8 samples total)
+    
+    Returns:
+        Extended glucose story with 30 data points
+    """
+    with get_conn() as conn:
+        trial = conn.execute(
+            "SELECT scenario_type FROM trial_plans WHERE subject_id = ? AND trial_index = ?",
+            (subject_id, trial_index),
+        ).fetchone()
+        if not trial:
+            raise HTTPException(status_code=404, detail="trial not found")
+    
+    scenario_type = trial["scenario_type"]
+    
+    # Limit sample_index to 0-3: four samples for each of the two scenarios.
+    if sample_index < 0 or sample_index > 3:
+        raise HTTPException(status_code=400, detail="sample_index must be between 0 and 3")
+    
+    # Load extended glucose data from file
+    glucose_story = build_glucose_story_from_extended_data(scenario_type, action_code, sample_index)
+    if not glucose_story:
+        raise HTTPException(status_code=404, detail="glucose data not available for this action")
+    
+    return glucose_story
