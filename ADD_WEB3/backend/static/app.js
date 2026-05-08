@@ -1045,25 +1045,11 @@ function renderDecisionPanel() {
   `;
 
   root.querySelectorAll("button[data-action]:not([disabled])").forEach(btn => {
-    btn.onclick = async () => {
+    btn.onclick = () => {
       const action = btn.dataset.action;
       if (state.step === 1) state.initialAction = action;
       else state.finalAction = action;
       renderDecisionPanel();
-      
-      // 在Step 2选择运动方案时，加载该方案对应的经运动影响数据并开始流式加载
-      if (state.step === 2) {
-        try {
-          const glucoseOutcome = await loadActionGlucoseOutcome(action);
-          if (glucoseOutcome) {
-            const targetMinute = Math.max(...glucoseOutcome.glucose_series.map(p => p.minute), 0);
-            startGlucoseStreaming(glucoseOutcome.glucose_series, targetMinute);
-          }
-        } catch (err) {
-          console.error("Failed to load glucose outcome:", err);
-          // 继续使用基线数据，不影响流程
-        }
-      }
     };
   });
 
@@ -1130,11 +1116,18 @@ async function submitTrial() {
     return;
   }
 
-  state.decisionSubmitted = true;
   stopGlucoseStreaming();
+  try {
+    await loadActionGlucoseOutcome(state.finalAction);
+  } catch (err) {
+    console.error("Failed to load final glucose outcome:", err);
+  }
+
+  state.decisionSubmitted = true;
   state.glucoseFocusAction = state.finalAction;
   state.glucoseViewMode = "feedback";
-  const targetMinute = Math.max(...(state.trial.glucose_series || []).map(p => p.minute), 0);
+  const outcomeSeries = state.trial.glucose_outcome_series?.[state.finalAction] || state.trial.glucose_series || [];
+  const targetMinute = Math.max(...outcomeSeries.map(p => p.minute), 0);
   state.glucoseDisplayedUntil = targetMinute;
   renderExperimentTrial();
 
