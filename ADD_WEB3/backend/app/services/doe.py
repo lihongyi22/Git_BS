@@ -26,6 +26,34 @@ LATIN_SQUARE = {
     4: ["S", "P", "Q", "R", "R", "Q", "P", "S"],
 }
 
+SUBGROUPS = ["1A", "1B", "2A", "2B"]
+
+CONDITION_DEFINITIONS = {
+    "EV": {"style_type": "expert", "media_type": "voice", "label": "专家×语音"},
+    "PV": {"style_type": "peer", "media_type": "voice", "label": "伙伴×语音"},
+    "ED": {"style_type": "expert", "media_type": "digital_human", "label": "专家×数字人"},
+    "PD": {"style_type": "peer", "media_type": "digital_human", "label": "伙伴×数字人"},
+}
+
+SUBGROUP_CONDITION_ORDER = {
+    "1A": ["EV", "PV", "ED", "PD"],
+    "1B": ["PV", "EV", "PD", "ED"],
+    "2A": ["ED", "PD", "EV", "PV"],
+    "2B": ["PD", "ED", "PV", "EV"],
+}
+
+SUBGROUP_TO_ROW = {"1A": 1, "1B": 2, "2A": 3, "2B": 4}
+ROW_TO_SUBGROUP = {value: key for key, value in SUBGROUP_TO_ROW.items()}
+
+CONDITION_SAMPLE_INDEX = {"EV": 0, "PV": 1, "ED": 2, "PD": 3}
+
+SCENARIO_TASK_ORDER = [
+    ("A", "short_peak", 1),
+    ("B", "sustained_high", 1),
+    ("A", "short_peak", 2),
+    ("B", "sustained_high", 2),
+]
+
 EXPERT_SCORES = {
     "short_peak": {"C": 100.0, "A": 75.0, "D": 50.0, "B": 25.0, "E": -50.0},
     "sustained_high": {"B": 100.0, "A": 75.0, "C": 50.0, "D": 25.0, "E": -50.0},
@@ -59,6 +87,18 @@ def recommend_latin_row(group_counts: dict[int, int]) -> int:
     return min([1, 2, 3, 4], key=lambda row: (group_counts.get(row, 0), row))
 
 
+def recommend_sub_group(completed_login_count: int) -> str:
+    return SUBGROUPS[completed_login_count % len(SUBGROUPS)]
+
+
+def subgroup_to_latin_row(sub_group: str) -> int:
+    return SUBGROUP_TO_ROW.get(sub_group, 1)
+
+
+def subgroup_media_order(sub_group: str) -> str:
+    return "digital_human_first" if sub_group in {"2A", "2B"} else "voice_first"
+
+
 def condition_display_name(scenario_type: str, style: str, media: str) -> str:
     scenario = {"short_peak": "短时偏高", "sustained_high": "持续偏高"}.get(scenario_type, scenario_type)
     style_name = {"expert": "专家建议", "peer": "伙伴建议"}.get(style, style)
@@ -66,7 +106,16 @@ def condition_display_name(scenario_type: str, style: str, media: str) -> str:
     return f"{scenario} - {style_name} - {media_name}"
 
 
-def build_trial_plan(participant_code: str, latin_square_row: int, media_order: str) -> list[dict]:
+def host_condition_label(style: str, media: str) -> str:
+    style_name = "专家" if style == "expert" else "伙伴"
+    media_name = "语音" if media == "voice" else "数字人"
+    return f"{style_name}×{media_name}"
+
+
+def build_trial_plan(participant_code: str, latin_square_row: int, media_order: str, sub_group: str | None = None) -> list[dict]:
+    if sub_group:
+        return build_subgroup_trial_plan(participant_code, sub_group)
+
     plan: list[dict] = []
     for module_number in [1, 2]:
         media_type = media_for_module(media_order, module_number)
@@ -93,6 +142,48 @@ def build_trial_plan(participant_code: str, latin_square_row: int, media_order: 
                     "glucose_profile_key": f"{scenario_type}_{instance_id}",
                     "glucose_trend_label": "短时偏高" if scenario_type == "short_peak" else "持续偏高",
                     "glucose_variant_index": instance_id,
+                    "trigger_glucose": story["trigger_glucose"],
+                    "glucose_30": story["glucose_30"],
+                    "glucose_60": story["glucose_60"],
+                    "glucose_series_json": json.dumps(story["glucose_series"], ensure_ascii=False),
+                    "glucose_outcome_json": json.dumps(story, ensure_ascii=False),
+                    "recommended_action": RECOMMENDED_ACTION[scenario_type],
+                }
+            )
+    return plan
+
+
+def build_subgroup_trial_plan(participant_code: str, sub_group: str) -> list[dict]:
+    plan: list[dict] = []
+    condition_queue = SUBGROUP_CONDITION_ORDER.get(sub_group, SUBGROUP_CONDITION_ORDER["1A"])
+    for condition_order, condition_code in enumerate(condition_queue, start=1):
+        condition = CONDITION_DEFINITIONS[condition_code]
+        module_number = 1 if condition_order <= 2 else 2
+        for task_offset, (scenario_code, scenario_type, repeat_no) in enumerate(SCENARIO_TASK_ORDER, start=1):
+            global_trial_number = (condition_order - 1) * 4 + task_offset
+            story = build_glucose_story(scenario_type, participant_code, global_trial_number, CONDITION_SAMPLE_INDEX[condition_code])
+            plan.append(
+                {
+                    "subject_id": participant_code,
+                    "trial_index": global_trial_number - 1,
+                    "repetition_no": repeat_no,
+                    "module_number": module_number,
+                    "trial_number_in_module": (condition_order - 1 if module_number == 1 else condition_order - 3) * 4 + task_offset,
+                    "global_trial_number": global_trial_number,
+                    "condition_id": condition_code,
+                    "condition_code": condition_code,
+                    "condition_order": condition_order,
+                    "condition_label": condition["label"],
+                    "scenario_code": scenario_code,
+                    "scenario_type": scenario_type,
+                    "condition_style": condition["style_type"],
+                    "condition_media": condition["media_type"],
+                    "instance_id": CONDITION_SAMPLE_INDEX[condition_code],
+                    "repeat_no": repeat_no,
+                    "task_type": "formal",
+                    "glucose_profile_key": f"{scenario_type}_{condition_code}",
+                    "glucose_trend_label": "短时偏高" if scenario_type == "short_peak" else "持续偏高",
+                    "glucose_variant_index": CONDITION_SAMPLE_INDEX[condition_code],
                     "trigger_glucose": story["trigger_glucose"],
                     "glucose_30": story["glucose_30"],
                     "glucose_60": story["glucose_60"],

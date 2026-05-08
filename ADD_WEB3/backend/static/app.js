@@ -44,6 +44,14 @@ const api = {
   },
   getSubject(id) { return this.request(`/api/subjects/${id}`); },
   listSubjects() { return this.request("/api/subjects"); },
+  subgroupMeta() { return this.request("/api/subjects/meta/subgroups"); },
+  setModule(subjectId, module) {
+    return this.request(`/api/subjects/${subjectId}/module`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ module }),
+    });
+  },
   nextTrial(id) { return this.request(`/api/experiment/${id}/next`); },
   logTrial(payload) {
     return this.request("/api/experiment/log", {
@@ -81,6 +89,13 @@ const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ subject_id: subjectId, rest_duration_seconds: restDurationSeconds }),
+    });
+  },
+  logPractice(payload) {
+    return this.request("/api/experiment/practice-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
   },
   getDashboard() { return this.request("/api/admin/dashboard"); },
@@ -686,6 +701,21 @@ function currentGlucosePointFor(series, axis) {
     || series[0];
 }
 
+function predictionSummaryFromSeries(series, axis, fallback = null) {
+  const decisionMinute = axis?.decision_minute ?? series.find(point => point.kind === "decision")?.minute ?? series[9]?.minute ?? 0;
+  const forecastPoints = [...(series || [])]
+    .filter(point => isPredictionPoint(point) && point.minute > decisionMinute)
+    .sort((a, b) => a.minute - b.minute);
+  const minute30Point = forecastPoints[1] || fallback?.minute_30 || null;
+  const minute60Point = forecastPoints[3] || fallback?.minute_60 || null;
+  if (!minute30Point || !minute60Point) return fallback;
+  return {
+    minute_30: { value: Number(minute30Point.value), kind: "forecast" },
+    minute_60: { value: Number(minute60Point.value), kind: "forecast" },
+    summary: fallback?.summary || "",
+  };
+}
+
 function updateGlucoseDisplayOnly() {
   const ctx = activeGlucoseContext();
   if (!ctx) return;
@@ -712,9 +742,11 @@ function renderExperimentTrial() {
   const topGlucosePoint = currentGlucosePointFor(chartSeries, chartAxis);
   const topGlucoseValue = topGlucosePoint ? topGlucosePoint.value : t.trigger_glucose;
   const chartMarkup = renderGlucoseChart(chartSeries, { ...chartAxis, events: chartEvents }, summary);
-  const topSummary = activeAction
-    ? summary
-    : { minute_30: { value: t.glucose_30 }, minute_60: { value: t.glucose_60 } };
+  const topSummary = predictionSummaryFromSeries(
+    chartSeries,
+    chartAxis,
+    activeAction ? summary : { minute_30: { value: t.glucose_30 }, minute_60: { value: t.glucose_60 } }
+  );
   const impactText = activeAction ? decisionImpactText(t.scenario_type, activeAction) : null;
   c.innerHTML = `
     <div class="exp-layout">
@@ -1261,6 +1293,7 @@ async function submitTrial() {
     response_time_ms: responseTime,
     advice_start_ts: state.stepStartTs,
     advice_end_ts: Date.now(),
+    final_choice_ts: Date.now(),
   };
 
   try {
@@ -1274,7 +1307,7 @@ async function submitTrial() {
         state.subject = await api.getSubject(state.subject.subject_id);
         await renderRest();
       } else {
-        await loadNextTrial();
+        await renderTaskBuffer();
       }
     };
     renderDecisionPanel();
@@ -1916,13 +1949,323 @@ function renderNotice() {
   `;
 }
 
+const SUBGROUP_LABELS = {
+  "1A": ["专家×语音", "伙伴×语音", "专家×数字人", "伙伴×数字人"],
+  "1B": ["伙伴×语音", "专家×语音", "伙伴×数字人", "专家×数字人"],
+  "2A": ["专家×数字人", "伙伴×数字人", "专家×语音", "伙伴×语音"],
+  "2B": ["伙伴×数字人", "专家×数字人", "伙伴×语音", "专家×语音"],
+};
+
+function hostOrderPanel(subject = state.subject) {
+  if (!subject) return "";
+  const labels = SUBGROUP_LABELS[subject.sub_group] || [];
+  return `
+    <details class="host-strip">
+      <summary>主试核查：子组 ${subject.sub_group || "-"} · 条件顺序</summary>
+      <div class="host-strip-list">${labels.map((label, idx) => `<span>${idx + 1}. ${label}</span>`).join("")}</div>
+    </details>
+  `;
+}
+
+function updateTopbar() {
+  if (!state.subject) {
+    document.getElementById("subjectId").textContent = "被试：-";
+    document.getElementById("moduleInfo").textContent = "准备中";
+    document.getElementById("conditionDisplay").innerHTML = '<div class="condition-chip condition-chip-empty">主试核查</div>';
+    return;
+  }
+  const moduleMap = {
+    PRE_SURVEY: "实验前问卷",
+    TRAINING1: "第一阶段培训",
+    PRACTICE1: "第一阶段练习",
+    RUNNING: "正式任务",
+    REST: "中场休息",
+    TRAINING2: "第二阶段培训",
+    PRACTICE2: "第二阶段练习",
+    POST_SURVEY: "实验后问卷",
+    DONE: "已完成",
+  };
+  document.getElementById("subjectId").textContent = `被试：${state.subject.subject_id}`;
+  document.getElementById("moduleInfo").textContent = `${moduleMap[state.subject.current_module] || state.subject.current_module} · 进度 ${state.subject.current_trial_index}/${state.subject.total_trials}`;
+  const labels = SUBGROUP_LABELS[state.subject.sub_group] || [];
+  document.getElementById("conditionDisplay").innerHTML = `
+    <details class="top-host-details">
+      <summary>主试核查：${state.subject.sub_group || "-"} 条件顺序</summary>
+      <div class="top-host-menu">${labels.map((label, idx) => `<span>${idx + 1}. ${label}</span>`).join("")}</div>
+    </details>
+  `;
+}
+
+function holdPage({ title, body, button, onClick, extra = "" }) {
+  const container = document.getElementById("view-experiment");
+  container.innerHTML = `
+    <div class="hold-layout">
+      ${hostOrderPanel()}
+      <div class="hold-card">
+        <h2>${title}</h2>
+        <div class="hold-body">${body}</div>
+        ${extra}
+        <button class="primary hold-action" id="holdAction">${button}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("holdAction").onclick = onClick;
+  updateTopbar();
+  setView("experiment");
+}
+
+async function openSubjectFlow() {
+  state.subject = await api.getSubject(state.subject.subject_id);
+  updateTopbar();
+  const module = state.subject.current_module;
+  if (module === "TRAINING") await renderTraining(1);
+  else if (module === "PRE_SURVEY") await renderPreSurvey();
+  else if (module === "TRAINING1") await renderTraining(1);
+  else if (module === "PRACTICE1") await renderPracticeTask(1);
+  else if (module === "REST") await renderRest();
+  else if (module === "TRAINING2") await renderTraining(2);
+  else if (module === "PRACTICE2") await renderPracticeTask(2);
+  else if (module === "POST_SURVEY" || state.subject.current_trial_index >= state.subject.total_trials) await renderPostSurvey();
+  else if (module === "DONE") renderEndPage();
+  else await loadNextTrial();
+  setView("experiment");
+}
+
+async function renderHome() {
+  const el = document.getElementById("view-home");
+  let meta = { recommended: "1A", counts: { "1A": 0, "1B": 0, "2A": 0, "2B": 0 }, order: SUBGROUP_LABELS };
+  try { meta = await api.subgroupMeta(); } catch (e) {}
+  const orderPreview = (group) => (meta.order?.[group] || SUBGROUP_LABELS[group] || []).map((label, idx) => `${idx + 1}.${label}`).join(" → ");
+  el.innerHTML = `
+    <div class="home-grid new-flow-home">
+      <div class="card">
+        <h3>新建被试</h3>
+        <p class="muted">系统按 1A → 1B → 2A → 2B 循环推荐子组；主试可手动调整。</p>
+        <input id="subject_id" placeholder="被试编号，可留空自动生成" />
+        <input id="subject_name" placeholder="姓名（可选）" />
+        <input id="subject_phone" placeholder="电话（可选）" />
+        <input id="subject_age" type="number" min="18" max="95" value="65" placeholder="年龄" />
+        <select id="subject_gender">
+          <option value="M">男</option>
+          <option value="F">女</option>
+          <option value="Other">其他</option>
+        </select>
+        <label class="field-label">主试选择子组</label>
+        <select id="subject_sub_group">
+          ${["1A","1B","2A","2B"].map(group => `<option value="${group}" ${meta.recommended === group ? "selected" : ""}>${group}（当前 ${meta.counts?.[group] || 0} 人）</option>`).join("")}
+        </select>
+        <div class="host-subgroup-preview" id="subgroupPreview">${orderPreview(meta.recommended)}</div>
+        <button class="primary" id="btnCreate">确认进入</button>
+      </div>
+      <div class="card">
+        <h3>继续已有被试</h3>
+        <div id="recordsPreview">加载中...</div>
+      </div>
+      <div class="card">
+        <h3>主试核查</h3>
+        <p class="muted">条件标签只在主试核查区域显示；被试任务界面不主动呈现条件名称。</p>
+        <div class="subgroup-table">${["1A","1B","2A","2B"].map(group => `<div><strong>${group}</strong><span>${orderPreview(group)}</span></div>`).join("")}</div>
+      </div>
+    </div>
+  `;
+  document.getElementById("subject_sub_group").onchange = (event) => {
+    document.getElementById("subgroupPreview").textContent = orderPreview(event.target.value);
+  };
+  document.getElementById("btnCreate").onclick = async () => {
+    try {
+      state.subject = await api.createSubject({
+        subject_id: document.getElementById("subject_id").value.trim() || null,
+        name: document.getElementById("subject_name").value.trim() || null,
+        phone: document.getElementById("subject_phone").value.trim() || null,
+        age: Number(document.getElementById("subject_age").value),
+        gender: document.getElementById("subject_gender").value,
+        sub_group: document.getElementById("subject_sub_group").value,
+      });
+      await openSubjectFlow();
+    } catch (e) {
+      alert(`创建失败: ${e.message}`);
+    }
+  };
+  api.listSubjects().then((rows) => {
+    document.getElementById("recordsPreview").innerHTML = rows.slice(0, 8).map((r) => `
+      <div class="record-row">
+        <div><strong>${r.subject_id}</strong><span>子组 ${r.sub_group || "-"} · 进度 ${r.current_trial_index}/${r.total_trials}</span></div>
+        <button data-continue="${r.subject_id}" class="secondary">继续</button>
+      </div>
+    `).join("") || "<p class='muted'>暂无记录</p>";
+    document.querySelectorAll("[data-continue]").forEach((btn) => {
+      btn.onclick = async () => {
+        state.subject = await api.getSubject(btn.dataset.continue);
+        await openSubjectFlow();
+      };
+    });
+  });
+}
+
+async function renderPreSurvey() {
+  holdPage({
+    title: "请完成纸质问卷【第一部分：实验前问卷】",
+    body: "<p>填写完成后，请告知实验员。</p>",
+    button: "已完成问卷，继续",
+    onClick: async () => {
+      await api.setModule(state.subject.subject_id, "TRAINING1");
+      state.subject = await api.getSubject(state.subject.subject_id);
+      await renderTraining(1);
+    },
+  });
+}
+
+async function renderTraining(stage = 1) {
+  const first = stage === 1;
+  holdPage({
+    title: first ? "现在开始任务操作培训" : "接下来将切换为新的建议形式",
+    body: first
+      ? "<p>请跟随实验员的PPT讲解完成培训。</p><p>培训结束后将进行一次练习任务。</p>"
+      : "<p>请跟随实验员的PPT讲解完成培训。</p>",
+    button: "培训完成，开始练习",
+    onClick: async () => {
+      await api.setModule(state.subject.subject_id, first ? "PRACTICE1" : "PRACTICE2");
+      state.subject = await api.getSubject(state.subject.subject_id);
+      await renderPracticeTask(stage);
+    },
+  });
+}
+
+async function renderPracticeTask(stage = 1) {
+  const container = document.getElementById("view-experiment");
+  let action = null;
+  let confidence = null;
+  const startedAt = Date.now();
+  const options = [
+    { code: "A", label: "快走 1 公里" },
+    { code: "B", label: "快走 2 公里" },
+    { code: "C", label: "慢跑 1 公里" },
+    { code: "D", label: "慢跑 2 公里" },
+    { code: "E", label: "什么都不做" },
+  ];
+  const render = () => {
+    container.innerHTML = `
+      <div class="hold-layout">
+        ${hostOrderPanel()}
+        <div class="practice-card">
+          <h2>练习任务</h2>
+          <p class="muted">练习数据将单独标记为“练习”，不进入正式分析。</p>
+          <div class="choice-grid">${options.map(opt => `<button class="choice-btn ${action === opt.code ? "active" : ""}" data-practice-action="${opt.code}">${opt.label}</button>`).join("")}</div>
+          <div class="confidence-box">
+            <div class="confidence-title">请评估您对这个决策正确程度的信心</div>
+            <div class="confidence-buttons">${[1,2,3,4,5].map(n => `<button class="conf-btn ${confidence === n ? "active" : ""}" data-practice-conf="${n}"><div class="conf-value">${n}</div></button>`).join("")}</div>
+          </div>
+          <button class="primary hold-action" id="finishPractice">提交练习</button>
+        </div>
+      </div>
+    `;
+    container.querySelectorAll("[data-practice-action]").forEach(btn => btn.onclick = () => { action = btn.dataset.practiceAction; render(); });
+    container.querySelectorAll("[data-practice-conf]").forEach(btn => btn.onclick = () => { confidence = Number(btn.dataset.practiceConf); render(); });
+    document.getElementById("finishPractice").onclick = async () => {
+      if (!action || !confidence) { alert("请先选择运动方案并完成信心评分。"); return; }
+      await api.logPractice({ subject_id: state.subject.subject_id, stage, action, confidence, response_time_ms: Date.now() - startedAt });
+      await renderPracticeDone(stage);
+    };
+  };
+  render();
+  updateTopbar();
+  setView("experiment");
+}
+
+async function renderPracticeDone(stage = 1) {
+  holdPage({
+    title: "练习完成",
+    body: "<p>如有疑问请现在询问实验员。</p>",
+    button: stage === 1 ? "开始正式实验" : "开始第二阶段",
+    onClick: async () => {
+      await api.setModule(state.subject.subject_id, "RUNNING");
+      state.subject = await api.getSubject(state.subject.subject_id);
+      await loadNextTrial();
+    },
+  });
+}
+
+async function renderTaskBuffer() {
+  state.subject = await api.getSubject(state.subject.subject_id);
+  holdPage({
+    title: "本次任务已完成",
+    body: "<p>准备好后请点击开始下一题。</p>",
+    button: "开始下一题",
+    onClick: loadNextTrial,
+  });
+}
+
+async function renderRest() {
+  const container = document.getElementById("view-experiment");
+  const startedAt = Date.now();
+  let remaining = 180;
+  let timer = null;
+  let paused = false;
+  const draw = () => {
+    const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
+    const ss = String(remaining % 60).padStart(2, "0");
+    container.innerHTML = `
+      <div class="hold-layout">
+        ${hostOrderPanel()}
+        <div class="hold-card">
+          <h2>第一阶段已完成，请休息</h2>
+          <div class="rest-countdown">${mm}:${ss}</div>
+          <p>如需暂停计时（如去洗手间），请告知实验员按下暂停键。</p>
+          <div class="rest-controls">
+            <button class="secondary" id="pauseRest">暂停</button>
+            <button class="secondary" id="resumeRest">继续</button>
+          </div>
+          <button class="primary hold-action" id="continueAfterRest" ${remaining > 0 ? "disabled" : ""}>继续下一阶段</button>
+        </div>
+      </div>
+    `;
+    document.getElementById("pauseRest").onclick = () => { paused = true; };
+    document.getElementById("resumeRest").onclick = () => { paused = false; };
+    document.getElementById("continueAfterRest").onclick = async () => {
+      if (remaining > 0) return;
+      clearInterval(timer);
+      await api.completeRest(state.subject.subject_id, Math.round((Date.now() - startedAt) / 1000));
+      state.subject = await api.getSubject(state.subject.subject_id);
+      await renderTraining(2);
+    };
+  };
+  draw();
+  timer = setInterval(() => {
+    if (!paused && remaining > 0) remaining -= 1;
+    draw();
+    if (remaining === 0) clearInterval(timer);
+  }, 1000);
+}
+
+async function renderPostSurvey() {
+  holdPage({
+    title: "实验任务已全部完成，感谢您的参与！",
+    body: "<p>请完成纸质问卷【第二部分：实验后问卷】。</p><p>填写完成后，请告知实验员。</p>",
+    button: "已完成问卷，结束实验",
+    onClick: async () => {
+      await api.setModule(state.subject.subject_id, "DONE");
+      state.subject = await api.getSubject(state.subject.subject_id);
+      renderEndPage();
+    },
+  });
+}
+
+function renderEndPage() {
+  holdPage({
+    title: "实验已全部完成",
+    body: "<p>数据已保存，感谢您的参与！</p>",
+    button: "返回首页",
+    onClick: async () => { await renderHome(); setView("home"); },
+  });
+}
+
 
 // ===== 选项卡绑定 =====
 function bindTabs() {
   document.querySelectorAll(".tabs button").forEach(btn => {
     btn.onclick = async () => {
       const view = btn.dataset.view;
-      if (view === "home") renderHome();
+      if (view === "home") await renderHome();
       else if (view === "records") await renderRecords();
       else if (view === "scales") await renderScales();
       else if (view === "notice") renderNotice();
@@ -1938,7 +2281,7 @@ function bindTabs() {
 // ===== 启动 =====
 async function boot() {
   bindTabs();
-  renderHome();
+  await renderHome();
   renderNotice();
   await renderScales();
   await renderRecords();

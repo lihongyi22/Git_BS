@@ -156,6 +156,165 @@ body {
   font-size: 18px;
 }
 
+.field-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.host-strip,
+.top-host-details {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.host-strip {
+  width: min(860px, 100%);
+  margin: 0 auto 14px;
+}
+
+.host-strip summary,
+.top-host-details summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.host-strip-list,
+.top-host-menu {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 14px 12px;
+}
+
+.host-strip-list span,
+.top-host-menu span {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.top-host-details {
+  position: relative;
+}
+
+.top-host-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.14);
+}
+
+.hold-layout {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+}
+
+.hold-card,
+.practice-card {
+  width: min(880px, 100%);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  padding: 44px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.hold-card h2,
+.practice-card h2 {
+  margin: 0 0 20px;
+  color: var(--primary);
+  font-size: 42px;
+  line-height: 1.25;
+}
+
+.hold-body {
+  min-height: 120px;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.hold-action {
+  margin-top: 22px;
+  min-width: 280px;
+  min-height: 64px;
+  font-size: 28px;
+}
+
+.hold-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.rest-countdown {
+  font-size: 68px;
+  font-weight: 900;
+  color: var(--primary);
+  letter-spacing: 0;
+  margin: 12px 0;
+}
+
+.rest-controls {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 18px 0;
+}
+
+.host-subgroup-preview,
+.subgroup-table div {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 16px;
+  color: var(--ink);
+  margin: 8px 0;
+}
+
+.subgroup-table {
+  display: grid;
+  gap: 10px;
+}
+
+.subgroup-table strong,
+.subgroup-table span,
+.record-row strong,
+.record-row span {
+  display: block;
+}
+
+.record-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--light);
+}
+
 input, select, textarea {
   width: 100%;
   border: 2px solid var(--border);

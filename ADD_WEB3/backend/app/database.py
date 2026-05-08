@@ -30,6 +30,7 @@ def init_db() -> None:
                 age INTEGER NOT NULL DEFAULT 18,
                 gender TEXT NOT NULL DEFAULT 'Other',
                 repeat_count INTEGER NOT NULL DEFAULT 2,
+                sub_group TEXT NOT NULL DEFAULT '1A',
                 latin_row INTEGER NOT NULL DEFAULT 1,
                 group_number INTEGER NOT NULL DEFAULT 1,
                 media_order TEXT NOT NULL DEFAULT 'voice_first',
@@ -56,6 +57,11 @@ def init_db() -> None:
                 scenario_type TEXT NOT NULL,
                 condition_style TEXT NOT NULL,
                 condition_media TEXT NOT NULL,
+                condition_order INTEGER,
+                condition_label TEXT,
+                scenario_code TEXT,
+                repeat_no INTEGER,
+                task_type TEXT NOT NULL DEFAULT 'formal',
                 instance_id INTEGER NOT NULL DEFAULT 1,
                 option_order_presented TEXT,
                 glucose_profile_key TEXT,
@@ -82,6 +88,12 @@ def init_db() -> None:
                 scenario_type TEXT NOT NULL,
                 condition_style TEXT NOT NULL,
                 condition_media TEXT NOT NULL,
+                sub_group TEXT,
+                condition_order INTEGER,
+                condition_label TEXT,
+                scenario_code TEXT,
+                repeat_no INTEGER,
+                task_type TEXT NOT NULL DEFAULT 'formal',
                 module_number INTEGER,
                 trial_number_in_module INTEGER,
                 global_trial_number INTEGER,
@@ -119,6 +131,19 @@ def init_db() -> None:
                 FOREIGN KEY(subject_id) REFERENCES subjects(id)
             );
 
+            CREATE TABLE IF NOT EXISTS practice_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id TEXT NOT NULL,
+                sub_group TEXT,
+                stage INTEGER NOT NULL,
+                task_type TEXT NOT NULL DEFAULT 'practice',
+                action TEXT,
+                confidence INTEGER,
+                response_time_ms INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(subject_id) REFERENCES subjects(id)
+            );
+
             CREATE TABLE IF NOT EXISTS surveys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 subject_id TEXT NOT NULL,
@@ -142,6 +167,7 @@ def init_db() -> None:
         )
 
         subject_columns = {
+            "sub_group": "sub_group TEXT NOT NULL DEFAULT '1A'",
             "group_number": "group_number INTEGER NOT NULL DEFAULT 1",
             "media_order": "media_order TEXT NOT NULL DEFAULT 'voice_first'",
             "training_completed_at": "training_completed_at TEXT",
@@ -154,6 +180,11 @@ def init_db() -> None:
             _ensure_column(conn, "subjects", name, definition)
 
         plan_columns = {
+            "condition_order": "condition_order INTEGER",
+            "condition_label": "condition_label TEXT",
+            "scenario_code": "scenario_code TEXT",
+            "repeat_no": "repeat_no INTEGER",
+            "task_type": "task_type TEXT NOT NULL DEFAULT 'formal'",
             "module_number": "module_number INTEGER NOT NULL DEFAULT 1",
             "trial_number_in_module": "trial_number_in_module INTEGER NOT NULL DEFAULT 1",
             "global_trial_number": "global_trial_number INTEGER NOT NULL DEFAULT 1",
@@ -166,6 +197,12 @@ def init_db() -> None:
             _ensure_column(conn, "trial_plans", name, definition)
 
         log_columns = {
+            "sub_group": "sub_group TEXT",
+            "condition_order": "condition_order INTEGER",
+            "condition_label": "condition_label TEXT",
+            "scenario_code": "scenario_code TEXT",
+            "repeat_no": "repeat_no INTEGER",
+            "task_type": "task_type TEXT NOT NULL DEFAULT 'formal'",
             "condition_code": "condition_code TEXT",
             "module_number": "module_number INTEGER",
             "trial_number_in_module": "trial_number_in_module INTEGER",
@@ -195,6 +232,7 @@ def init_db() -> None:
                 id AS participant_id,
                 id AS participant_code,
                 group_number,
+                sub_group,
                 media_order,
                 latin_row AS latin_square_row,
                 training_completed_at,
@@ -212,6 +250,12 @@ def init_db() -> None:
                 l.trial_number_in_module,
                 l.global_trial_number,
                 l.condition_code,
+                l.sub_group,
+                l.condition_order,
+                l.condition_label,
+                l.scenario_code,
+                l.repeat_no,
+                l.task_type,
                 l.scenario_type,
                 l.condition_style AS style_type,
                 l.condition_media AS media_type,

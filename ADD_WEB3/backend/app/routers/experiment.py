@@ -6,7 +6,7 @@ import random
 from fastapi import APIRouter, HTTPException
 
 from app.database import get_conn
-from app.schemas import RestCompleteIn, TrainingCompleteIn, TrialLogIn, TrialLogOut, TrialOut
+from app.schemas import PracticeLogIn, RestCompleteIn, TrainingCompleteIn, TrialLogIn, TrialLogOut, TrialOut
 from app.services.doe import ACTION_OPTIONS, action_quality, advice_text, build_glucose_story, calculate_woa, condition_display_name
 from app.services.media import resolve_media_urls
 from app.services.glucose_story import build_glucose_story_from_extended_data
@@ -22,14 +22,7 @@ def _trial_glucose_sample_index(condition_code: str | None, scenario_type: str, 
     expert/peer style x instance 1/2.
     """
     code = condition_code or ""
-    instance_offset = 0 if int(instance_id or 1) == 1 else 1
-    if scenario_type == "short_peak":
-        base = {"P": 0, "R": 2}.get(code, 0)
-    elif scenario_type == "sustained_high":
-        base = {"Q": 0, "S": 2}.get(code, 0)
-    else:
-        base = 0
-    return (base + instance_offset) % 4
+    return {"EV": 0, "PV": 1, "ED": 2, "PD": 3, "P": 0, "Q": 0, "R": 2, "S": 2}.get(code, int(instance_id or 0) % 4)
 
 
 def _baseline_story_from_file(subject_id: str, trial: dict) -> dict | None:
@@ -61,6 +54,12 @@ def _baseline_story_from_file(subject_id: str, trial: dict) -> dict | None:
     }
 
 
+def _media_lookup_key(scenario_type: str, style: str, media: str) -> str:
+    scenario_key = "III_short_hyper" if scenario_type == "short_peak" else "IV_persistent_high_normal"
+    media_key = "audio" if media in {"voice", "audio"} else "avatar"
+    return f"{scenario_key}__{style}__{media_key}"
+
+
 @router.post("/training-complete")
 def complete_training(payload: TrainingCompleteIn) -> dict:
     with get_conn() as conn:
@@ -86,8 +85,24 @@ def complete_rest(payload: RestCompleteIn) -> dict:
         if not subject:
             raise HTTPException(status_code=404, detail="subject not found")
         conn.execute(
-            "UPDATE subjects SET rest_duration_seconds = COALESCE(rest_duration_seconds, 0) + ?, current_module = 'RUNNING' WHERE id = ?",
+            "UPDATE subjects SET rest_duration_seconds = COALESCE(rest_duration_seconds, 0) + ?, current_module = 'TRAINING2' WHERE id = ?",
             (payload.rest_duration_seconds, payload.subject_id),
+        )
+    return {"ok": True}
+
+
+@router.post("/practice-log")
+def log_practice(payload: PracticeLogIn) -> dict:
+    with get_conn() as conn:
+        subject = conn.execute("SELECT id, sub_group FROM subjects WHERE id = ?", (payload.subject_id,)).fetchone()
+        if not subject:
+            raise HTTPException(status_code=404, detail="subject not found")
+        conn.execute(
+            """
+            INSERT INTO practice_logs (subject_id, sub_group, stage, action, confidence, response_time_ms)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (payload.subject_id, subject["sub_group"], payload.stage, payload.action, payload.confidence, payload.response_time_ms),
         )
     return {"ok": True}
 
@@ -96,13 +111,13 @@ def complete_rest(payload: RestCompleteIn) -> dict:
 def get_next_trial(subject_id: str) -> TrialOut:
     with get_conn() as conn:
         subject = conn.execute(
-            "SELECT id, current_trial_index, training_completed_at FROM subjects WHERE id = ?",
+            "SELECT id, current_trial_index, training_completed_at, current_module, sub_group FROM subjects WHERE id = ?",
             (subject_id,),
         ).fetchone()
         if not subject:
             raise HTTPException(status_code=404, detail="subject not found")
-        if not subject["training_completed_at"]:
-            raise HTTPException(status_code=409, detail="training not completed")
+        if subject["current_module"] not in {"RUNNING", "REST"}:
+            raise HTTPException(status_code=409, detail="subject is not in running module")
 
         trial = conn.execute(
             """
@@ -133,7 +148,9 @@ def get_next_trial(subject_id: str) -> TrialOut:
         total_trials = conn.execute("SELECT COUNT(*) AS cnt FROM trial_plans WHERE subject_id = ?", (subject_id,)).fetchone()["cnt"]
         all_trials = conn.execute(
             """
-            SELECT trial_index, repetition_no, condition_id, condition_code, scenario_type, condition_style, condition_media, status
+            SELECT trial_index, repetition_no, condition_id, condition_code, condition_order,
+                   condition_label, scenario_code, repeat_no, scenario_type, condition_style,
+                   condition_media, status
             FROM trial_plans
             WHERE subject_id = ?
             ORDER BY trial_index
@@ -142,14 +159,14 @@ def get_next_trial(subject_id: str) -> TrialOut:
         ).fetchall()
 
     completed_conditions = [
-        condition_display_name(t["scenario_type"], t["condition_style"], t["condition_media"])
+        t["condition_label"] or condition_display_name(t["scenario_type"], t["condition_style"], t["condition_media"])
         for t in all_trials
         if t["trial_index"] < subject["current_trial_index"]
     ]
     remaining_conditions = [
         {
             "trial_index": t["trial_index"],
-            "display_name": condition_display_name(t["scenario_type"], t["condition_style"], t["condition_media"]),
+            "display_name": t["condition_label"] or condition_display_name(t["scenario_type"], t["condition_style"], t["condition_media"]),
             "repetition": t["repetition_no"],
         }
         for t in all_trials
@@ -163,7 +180,8 @@ def get_next_trial(subject_id: str) -> TrialOut:
     glucose_series = glucose_story["glucose_series"]
     action_by_code = {item["code"]: item for item in ACTION_OPTIONS}
     ordered_actions = [action_by_code[code] for code in option_codes]
-    audio_url, video_url = resolve_media_urls(trial["condition_id"], trial["condition_media"])
+    media_lookup_key = _media_lookup_key(trial["scenario_type"], trial["condition_style"], trial["condition_media"])
+    audio_url, video_url = resolve_media_urls(media_lookup_key, trial["condition_media"])
 
     return TrialOut(
         subject_id=subject_id,
@@ -175,6 +193,11 @@ def get_next_trial(subject_id: str) -> TrialOut:
         global_trial_number=trial["global_trial_number"],
         condition_id=trial["condition_id"],
         condition_code=trial["condition_code"] or trial["condition_id"],
+        condition_order=trial["condition_order"],
+        condition_label=trial["condition_label"],
+        scenario_code=trial["scenario_code"],
+        repeat_no=trial["repeat_no"],
+        task_type=trial["task_type"],
         condition_display=condition_display_name(trial["scenario_type"], trial["condition_style"], trial["condition_media"]),
         scenario_type=trial["scenario_type"],
         condition_style=trial["condition_style"],
@@ -207,7 +230,7 @@ def get_next_trial(subject_id: str) -> TrialOut:
 def log_trial(payload: TrialLogIn) -> TrialLogOut:
     with get_conn() as conn:
         subject = conn.execute(
-            "SELECT current_trial_index FROM subjects WHERE id = ?",
+            "SELECT current_trial_index, sub_group FROM subjects WHERE id = ?",
             (payload.subject_id,),
         ).fetchone()
         if not subject:
@@ -233,7 +256,8 @@ def log_trial(payload: TrialLogIn) -> TrialLogOut:
         conn.execute(
             """
             INSERT INTO trial_logs (
-                subject_id, trial_index, condition_id, condition_code, scenario_type, condition_style,
+                subject_id, trial_index, condition_id, condition_code, sub_group, condition_order,
+                condition_label, scenario_code, repeat_no, task_type, scenario_type, condition_style,
                 condition_media, module_number, trial_number_in_module, global_trial_number, instance_id,
                 option_order_presented, glucose_profile_key, glucose_trend_label, glucose_variant_index,
                 initial_action, initial_choice_score, initial_confidence, confidence_before,
@@ -241,13 +265,19 @@ def log_trial(payload: TrialLogIn) -> TrialLogOut:
                 final_action, final_choice_score, final_confidence, confidence_after, response_time_ms,
                 trial_duration_seconds, initial_quality, final_quality, quality_delta, confidence_delta,
                 delta_confidence, woa, woa_score, woa_null_reason, woe, advice_start_ts, advice_end_ts, final_choice_ts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload.subject_id,
                 payload.trial_index,
                 trial["condition_id"],
                 trial["condition_code"] or trial["condition_id"],
+                subject["sub_group"],
+                trial["condition_order"],
+                trial["condition_label"],
+                trial["scenario_code"],
+                trial["repeat_no"],
+                trial["task_type"],
                 trial["scenario_type"],
                 trial["condition_style"],
                 trial["condition_media"],
@@ -295,7 +325,7 @@ def log_trial(payload: TrialLogIn) -> TrialLogOut:
             conn.execute(
                 """
                 UPDATE subjects
-                SET current_trial_index = ?, current_module = ?, experiment_completed_at = CURRENT_TIMESTAMP
+                SET current_trial_index = ?, current_module = ?
                 WHERE id = ?
                 """,
                 (next_trial, module, payload.subject_id),

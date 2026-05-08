@@ -462,9 +462,10 @@ def build_glucose_story_from_extended_data(scenario_type: str, action_code: str,
 
 
 # WEB3 overrides: use only four samples per scenario and align the 10th point
-# as the current decision point. Kept at the end so it supersedes the older
-# compatibility helpers above.
-WEB3_OUTCOME_TIMELINE = [-45, -40, -35, -30, -25, -20, -15, -10, -5, 0] + list(range(5, 105, 5))
+# as the current decision point. The experiment UI uses a fixed 15-minute
+# interval between adjacent points, so +30 and +60 are visible forecast points
+# in the same series used by the chart header.
+WEB3_OUTCOME_TIMELINE = [-135, -120, -105, -90, -75, -60, -45, -30, -15, 0] + list(range(15, 315, 15))
 WEB3_ACTION_FOLDERS = {
     "A": "Walking_1km",
     "B": "Walking_2km",
@@ -560,10 +561,10 @@ def build_glucose_story_from_extended_data(scenario_type: str, action_code: str,
         "glucose_series": series,
         "glucose_axis": {
             "unit": "mmol/L",
-            "step_minutes": 5,
-            "window_minutes": 145,
-            "min_minutes": -45,
-            "max_minutes": 100,
+            "step_minutes": 15,
+            "window_minutes": 435,
+            "min_minutes": -135,
+            "max_minutes": 300,
             "time_marks": WEB3_OUTCOME_TIMELINE,
             "time_labels": [_web3_clock_label(minute) for minute in WEB3_OUTCOME_TIMELINE],
             "decision_minute": 0,

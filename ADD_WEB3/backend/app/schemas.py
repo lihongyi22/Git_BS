@@ -17,6 +17,7 @@ class SubjectCreate(BaseModel):
     national_id: Optional[str] = Field(default=None, max_length=40)
     age: int = Field(ge=18, le=95)
     gender: Gender
+    sub_group: Optional[Literal["1A", "1B", "2A", "2B"]] = None
     latin_square_row: Optional[int] = Field(default=None, ge=1, le=4)
     media_order: Optional[Literal["voice_first", "digital_human_first"]] = None
 
@@ -30,6 +31,7 @@ class SubjectOut(BaseModel):
     age: int
     gender: str
     repeat_count: int
+    sub_group: str = "1A"
     latin_row: int
     group_number: int
     media_order: str
@@ -48,6 +50,7 @@ class SubjectRecord(BaseModel):
     age: int
     gender: str
     repeat_count: int
+    sub_group: str = "1A"
     latin_row: int
     group_number: int
     media_order: str
@@ -68,6 +71,11 @@ class TrialOut(BaseModel):
     global_trial_number: int
     condition_id: str
     condition_code: str
+    condition_order: Optional[int] = None
+    condition_label: Optional[str] = None
+    scenario_code: Optional[str] = None
+    repeat_no: Optional[int] = None
+    task_type: str = "formal"
     condition_display: str
     scenario_type: Scenario
     condition_style: Style
@@ -126,6 +134,18 @@ class TrainingCompleteIn(BaseModel):
 class RestCompleteIn(BaseModel):
     subject_id: str
     rest_duration_seconds: int = Field(ge=0)
+
+
+class ModuleUpdateIn(BaseModel):
+    module: Literal["PRE_SURVEY", "TRAINING1", "PRACTICE1", "RUNNING", "REST", "TRAINING2", "PRACTICE2", "POST_SURVEY", "DONE"]
+
+
+class PracticeLogIn(BaseModel):
+    subject_id: str
+    stage: int = Field(ge=1, le=2)
+    action: str
+    confidence: int = Field(ge=1, le=5)
+    response_time_ms: int = Field(ge=0, le=1800000)
 
 
 class AdminUpdateIn(BaseModel):
