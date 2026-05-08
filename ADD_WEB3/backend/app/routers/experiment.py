@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 
@@ -12,6 +13,42 @@ from app.services.media import resolve_media_urls
 from app.services.glucose_story import build_glucose_story_from_extended_data
 
 router = APIRouter(prefix="/api/experiment", tags=["experiment"])
+
+
+def _trial_glucose_sample_index(subject_id: str, trial_index: int, scenario_type: str, instance_id: int) -> int:
+    key = f"{subject_id}:{trial_index}:{scenario_type}:{instance_id}"
+    digest = hashlib.sha256(key.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") % 4
+
+
+def _baseline_story_from_file(subject_id: str, trial: dict) -> dict | None:
+    sample_index = _trial_glucose_sample_index(
+        subject_id,
+        trial["trial_index"],
+        trial["scenario_type"],
+        trial["instance_id"],
+    )
+    story = build_glucose_story_from_extended_data(trial["scenario_type"], "E", sample_index)
+    if not story:
+        return None
+
+    baseline_series = story["glucose_series"][:14]
+    baseline_minutes = [point["minute"] for point in baseline_series]
+    baseline_labels = [point.get("time_label") or point.get("label") for point in baseline_series]
+    return {
+        **story,
+        "profile_key": f"{trial['scenario_type']}_sample_{sample_index}",
+        "variant_index": sample_index,
+        "glucose_series": baseline_series,
+        "glucose_axis": {
+            **story["glucose_axis"],
+            "max_minutes": max(baseline_minutes),
+            "time_marks": baseline_minutes,
+            "time_labels": baseline_labels,
+        },
+        "glucose_events": [{"minute": 0, "label": "", "kind": "decision"}],
+        "glucose_sample_index": sample_index,
+    }
 
 
 @router.post("/training-complete")
@@ -109,11 +146,11 @@ def get_next_trial(subject_id: str) -> TrialOut:
         if t["trial_index"] > subject["current_trial_index"]
     ]
 
-    glucose_series = json.loads(trial["glucose_series_json"])
-    glucose_story = json.loads(trial["glucose_outcome_json"])
-    if len(glucose_series) != 14 or glucose_story.get("glucose_axis", {}).get("decision_minute") != 0:
+    glucose_story = _baseline_story_from_file(subject_id, trial)
+    if not glucose_story:
         glucose_story = build_glucose_story(trial["scenario_type"], subject_id, trial["global_trial_number"], trial["instance_id"])
-        glucose_series = glucose_story["glucose_series"]
+        glucose_story["glucose_sample_index"] = None
+    glucose_series = glucose_story["glucose_series"]
     action_by_code = {item["code"]: item for item in ACTION_OPTIONS}
     ordered_actions = [action_by_code[code] for code in option_codes]
     audio_url, video_url = resolve_media_urls(trial["condition_id"], trial["condition_media"])
@@ -136,7 +173,8 @@ def get_next_trial(subject_id: str) -> TrialOut:
         option_order_presented=option_codes,
         glucose_profile_key=trial["glucose_profile_key"],
         glucose_trend_label=trial["glucose_trend_label"],
-        glucose_variant_index=trial["glucose_variant_index"],
+        glucose_variant_index=glucose_story.get("variant_index", trial["glucose_variant_index"]),
+        glucose_sample_index=glucose_story.get("glucose_sample_index"),
         trigger_glucose=glucose_story["trigger_glucose"],
         glucose_30=glucose_story["glucose_30"],
         glucose_60=glucose_story["glucose_60"],
@@ -292,17 +330,19 @@ def get_glucose_outcome(subject_id: str, trial_index: int, action_code: str, sam
     """
     with get_conn() as conn:
         trial = conn.execute(
-            "SELECT scenario_type FROM trial_plans WHERE subject_id = ? AND trial_index = ?",
+            "SELECT trial_index, scenario_type, instance_id FROM trial_plans WHERE subject_id = ? AND trial_index = ?",
             (subject_id, trial_index),
         ).fetchone()
         if not trial:
             raise HTTPException(status_code=404, detail="trial not found")
     
-    scenario_type = trial["scenario_type"]
-    
-    # Limit sample_index to 0-3: four samples for each of the two scenarios.
+    # Limit client input to the documented range; the server still owns the
+    # actual trial-level sample choice so baseline and outcome always match.
     if sample_index < 0 or sample_index > 3:
         raise HTTPException(status_code=400, detail="sample_index must be between 0 and 3")
+
+    scenario_type = trial["scenario_type"]
+    sample_index = _trial_glucose_sample_index(subject_id, trial["trial_index"], scenario_type, trial["instance_id"])
     
     # Load extended glucose data from file
     glucose_story = build_glucose_story_from_extended_data(scenario_type, action_code, sample_index)

@@ -304,6 +304,26 @@ function playAdviceMedia() {
   }
 }
 
+function handleAdviceMediaError(element, kind, url) {
+  const label = kind === "video" ? "视频" : "音频";
+  window.setTimeout(() => {
+    if (!element || element.readyState > 0 || !element.error) return;
+    console.warn(`${label}暂时无法加载：${url}`, element.error);
+    const holder = element.closest(".audio-player");
+    const existing = holder?.querySelector(`[data-media-error="${kind}"]`);
+    if (existing) return;
+    holder?.insertAdjacentHTML(
+      "beforeend",
+      `<div class="media-load-hint" data-media-error="${kind}">${label}暂时无法加载，请稍后重试。</div>`
+    );
+  }, 900);
+}
+
+function clearAdviceMediaError(element, kind) {
+  const holder = element.closest(".audio-player");
+  holder?.querySelector(`[data-media-error="${kind}"]`)?.remove();
+}
+
 function startGlucoseStreaming(series, targetMinute, onComplete) {
   stopGlucoseStreaming();
 
@@ -749,13 +769,13 @@ function renderExperimentTrial() {
               ${state.glucoseStreamingActive ? `<div class="advice-status">建议将在曲线更新完成后自动播放</div>` : ''}
               ${["audio", "voice"].includes(t.condition_media) && t.audio_url
                 ? ((state.glucoseStreamingActive || finalResultVisible)
-                  ? `<div class="speaker-icon-large locked">🔊</div><audio id="adviceAudio" src="${t.audio_url}" onerror="console.error('音频加载失败：', '${t.audio_url}'); alert('音频加载失败：${t.audio_url}');" preload="auto"></audio>`
-                  : `<div class="speaker-icon-large" onclick="document.getElementById('adviceAudio').play();">🔊</div><audio id="adviceAudio" src="${t.audio_url}" onerror="console.error('音频加载失败：', '${t.audio_url}'); alert('音频加载失败：${t.audio_url}');" preload="auto"></audio>`)
+                  ? `<div class="speaker-icon-large locked">🔊</div><audio id="adviceAudio" src="${t.audio_url}" onerror="handleAdviceMediaError(this, 'audio', '${t.audio_url}')" onloadeddata="clearAdviceMediaError(this, 'audio')" preload="auto"></audio>`
+                  : `<div class="speaker-icon-large" onclick="document.getElementById('adviceAudio').play();">🔊</div><audio id="adviceAudio" src="${t.audio_url}" onerror="handleAdviceMediaError(this, 'audio', '${t.audio_url}')" onloadeddata="clearAdviceMediaError(this, 'audio')" preload="auto"></audio>`)
                 : (["audio", "voice"].includes(t.condition_media)
                   ? `<div style="padding:20px;color:red;text-align:center;"><strong>音频缺失</strong><br/>条件编号：${t.condition_id}</div>`
                   : "")}
               ${["avatar", "digital_human"].includes(t.condition_media) && t.video_url
-                ? `<video class="video-player ${(state.glucoseStreamingActive || finalResultVisible) ? 'locked' : ''}" ${(state.glucoseStreamingActive || finalResultVisible) ? '' : 'controls'} src="${t.video_url}" onerror="console.error('视频加载失败：', '${t.video_url}'); alert('视频加载失败：${t.video_url}');"></video>`
+                ? `<video class="video-player ${(state.glucoseStreamingActive || finalResultVisible) ? 'locked' : ''}" ${(state.glucoseStreamingActive || finalResultVisible) ? '' : 'controls'} src="${t.video_url}" onerror="handleAdviceMediaError(this, 'video', '${t.video_url}')" onloadeddata="clearAdviceMediaError(this, 'video')" preload="metadata"></video>`
                 : (["avatar", "digital_human"].includes(t.condition_media)
                   ? `<div style="padding:20px;color:red;text-align:center;"><strong>视频缺失</strong><br/>条件编号：${t.condition_id}</div>`
                   : "")}
@@ -1071,13 +1091,9 @@ function renderGlucoseChart(series, axis) {
 
 async function loadActionGlucoseOutcome(action) {
   if (!state.subject || !state.trial) return null;
-  const hashStr = `${state.subject.subject_id}:${state.trial.trial_index}:${action}`;
-  let hash = 0;
-  for (let i = 0; i < hashStr.length; i++) {
-    hash = ((hash << 5) - hash) + hashStr.charCodeAt(i);
-    hash = hash & hash;
-  }
-  const sampleIndex = Math.abs(hash) % 4;
+  const sampleIndex = Number.isInteger(state.trial.glucose_sample_index)
+    ? state.trial.glucose_sample_index
+    : (Number.isInteger(state.trial.glucose_variant_index) ? state.trial.glucose_variant_index % 4 : 0);
   const glucoseOutcome = await api.request(
     `/api/experiment/${state.subject.subject_id}/${state.trial.trial_index}/glucose-outcome/${action}/${sampleIndex}`
   );

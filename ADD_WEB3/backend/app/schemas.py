@@ -77,6 +77,7 @@ class TrialOut(BaseModel):
     glucose_profile_key: Optional[str] = None
     glucose_trend_label: Optional[str] = None
     glucose_variant_index: Optional[int] = None
+    glucose_sample_index: Optional[int] = None
     trigger_glucose: float
     glucose_30: float
     glucose_60: float
