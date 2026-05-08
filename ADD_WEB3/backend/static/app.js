@@ -192,6 +192,69 @@ function actionLabel(code) {
   return map[code] || code;
 }
 
+function decisionImpactText(scenarioType, actionCode) {
+  const normalizedScenario = scenarioType || "short_peak";
+  const normalizedAction = actionCode || "E";
+  const plans = {
+    sustained_high: {
+      A: {
+        minute30: "血糖恢复至正常范围",
+        minute60: "血糖可能再次接近偏高范围",
+        note: "达到一半目的，后期可能偏高",
+      },
+      B: {
+        minute30: "血糖恢复至正常范围",
+        minute60: "血糖稳定保持在正常范围",
+        note: "即达到目的，又无不良后果",
+      },
+      C: {
+        minute30: "血糖恢复至正常范围，但可能略偏低",
+        minute60: "血糖恢复至正常范围",
+        note: "达到目的，前期可能偏低",
+      },
+      D: {
+        minute30: "血糖恢复至正常范围，但可能略偏低",
+        minute60: "血糖可能维持正常或偏低",
+        note: "达到目的，全程可能偏低",
+      },
+      E: {
+        minute30: "血糖可能维持正常偏高状态",
+        minute60: "血糖仍可能维持正常偏高状态",
+        note: "未进行运动干预，持续偏高趋势可能延续，建议长时低强度运动",
+      },
+    },
+    short_peak: {
+      A: {
+        minute30: "血糖仍可能偏高",
+        minute60: "血糖恢复至正常范围",
+        note: "未达到目的，后续无不良后果",
+      },
+      B: {
+        minute30: "血糖恢复至正常范围",
+        minute60: "血糖可能进入正常或偏低范围",
+        note: "未达到目的，后续可能偏低",
+      },
+      C: {
+        minute30: "血糖恢复至正常范围，但可能略偏低",
+        minute60: "血糖完全恢复至正常范围",
+        note: "即达到目的，又无不良后果",
+      },
+      D: {
+        minute30: "血糖恢复至正常范围",
+        minute60: "血糖可能进入正常或偏低范围",
+        note: "达到目的，后续可能偏低",
+      },
+      E: {
+        minute30: "血糖可能升至过高范围",
+        minute60: "血糖逐步回落至正常范围",
+        note: "未进行运动干预，短时偏高风险仍可能在30分钟后出现，建议短时中强度运动",
+      },
+    },
+  };
+  const scenarioPlan = plans[normalizedScenario] || plans.short_peak;
+  return scenarioPlan[normalizedAction] || scenarioPlan.E;
+}
+
 function get5PointLabels() {
   return ["完全不同意", "不同意", "一般", "同意", "完全同意"];
 }
@@ -261,7 +324,7 @@ function startGlucoseStreaming(series, targetMinute, onComplete) {
     if (index < points.length) {
       state.glucoseDisplayedUntil = points[index].minute;
       index += 1;
-      renderExperimentTrial();
+      updateGlucoseDisplayOnly();
       state.glucoseStreamingTimer = setTimeout(tick, 1000);
       return;
     }
@@ -575,37 +638,64 @@ async function renderPreSurvey() {
   };
 }
 
+function activeGlucoseContext() {
+  if (!state.trial) return null;
+  const t = state.trial;
+  const step1ResultVisible = state.step === 1 && state.step1ResultVisible;
+  const finalResultVisible = state.step === 2 && state.decisionSubmitted;
+  const activeAction = step1ResultVisible
+    ? state.initialAction
+    : (finalResultVisible ? state.finalAction : null);
+  const chartSeries = activeAction ? (t.glucose_outcome_series?.[activeAction] || t.glucose_series) : t.glucose_series;
+  const chartAxis = activeAction ? (t.glucose_outcome_axis?.[activeAction] || t.glucose_axis) : t.glucose_axis;
+  const chartEvents = activeAction ? (t.glucose_outcome_events?.[activeAction] || t.glucose_events) : t.glucose_events;
+  const summary = activeAction ? t.glucose_outcome_summary?.[activeAction] : null;
+  return { t, activeAction, chartSeries, chartAxis, chartEvents, summary };
+}
+
+function currentGlucosePointFor(series, axis) {
+  const decisionMinute = axis?.decision_minute ?? series.find(point => point.kind === "decision")?.minute ?? series[9]?.minute ?? 0;
+  const cutoff = state.glucoseStreamingActive ? state.glucoseDisplayedUntil : Math.max(...series.map(point => point.minute));
+  const effectiveCutoff = Math.min(cutoff, decisionMinute);
+  return [...series]
+    .filter(point => !isPredictionPoint(point) && point.minute <= effectiveCutoff)
+    .sort((a, b) => a.minute - b.minute)
+    .pop()
+    || series.find(point => point.kind === "decision")
+    || series[9]
+    || series[0];
+}
+
+function updateGlucoseDisplayOnly() {
+  const ctx = activeGlucoseContext();
+  if (!ctx) return;
+  const { chartSeries, chartAxis, chartEvents, summary } = ctx;
+  const currentPoint = currentGlucosePointFor(chartSeries, chartAxis);
+  const currentEl = document.querySelector(".glucose-now.current");
+  if (currentEl && currentPoint) currentEl.textContent = currentPoint.value.toFixed(1);
+  const mount = document.getElementById("glucoseChartMount");
+  if (mount) mount.innerHTML = renderGlucoseChart(chartSeries, { ...chartAxis, events: chartEvents }, summary);
+}
+
 // ===== 实验试验渲染 =====
 function renderExperimentTrial() {
   const t = state.trial;
   const c = document.getElementById("view-experiment");
   const step1ResultVisible = state.step === 1 && state.step1ResultVisible;
   const finalResultVisible = state.step === 2 && state.decisionSubmitted;
-  const activeAction = step1ResultVisible
-    ? state.initialAction
-    : (finalResultVisible ? state.finalAction : null);
+  const ctx = activeGlucoseContext();
+  const { activeAction, chartSeries, chartAxis, chartEvents, summary } = ctx;
 
   state.glucoseFocusAction = activeAction || null;
   state.glucoseViewMode = activeAction ? "feedback" : "baseline";
 
-  const chartSeries = activeAction ? (t.glucose_outcome_series[activeAction] || t.glucose_series) : t.glucose_series;
-  const chartAxis = activeAction ? (t.glucose_outcome_axis?.[activeAction] || t.glucose_axis) : t.glucose_axis;
-  const chartEvents = activeAction ? (t.glucose_outcome_events?.[activeAction] || t.glucose_events) : t.glucose_events;
-  const summary = activeAction ? t.glucose_outcome_summary[activeAction] : null;
-  const maxSeriesMinute = Math.max(...chartSeries.map(p => p.minute), 0);
-  const visibleSeries = state.glucoseStreamingActive
-    ? chartSeries.filter((point) => point.minute <= state.glucoseDisplayedUntil)
-    : chartSeries;  // renderGlucoseChart会根据状态判断显示范围
-  const topGlucosePoint = chartSeries.find((point) => point.kind === "decision")
-    || chartSeries[9]
-    || [...visibleSeries].reverse().find((point) => !isPredictionPoint(point))
-    || visibleSeries[visibleSeries.length - 1]
-    || null;
+  const topGlucosePoint = currentGlucosePointFor(chartSeries, chartAxis);
   const topGlucoseValue = topGlucosePoint ? topGlucosePoint.value : t.trigger_glucose;
   const chartMarkup = renderGlucoseChart(chartSeries, { ...chartAxis, events: chartEvents }, summary);
   const topSummary = activeAction
     ? summary
     : { minute_30: { value: t.glucose_30 }, minute_60: { value: t.glucose_60 } };
+  const impactText = activeAction ? decisionImpactText(t.scenario_type, activeAction) : null;
   c.innerHTML = `
     <div class="exp-layout">
       <!-- 上半部分：血糖 + 建议 -->
@@ -639,7 +729,15 @@ function renderExperimentTrial() {
                 `}
               </div>
             </div>
-            ${chartMarkup}
+            <div id="glucoseChartMount">${chartMarkup}</div>
+            ${impactText ? `
+              <div class="decision-impact-summary">
+                <div class="impact-title">基于您的选择：${actionLabel(activeAction)}</div>
+                <div>30分钟后：${impactText.minute30}</div>
+                <div>60分钟后：${impactText.minute60}</div>
+                <div class="impact-note">${impactText.note}</div>
+              </div>
+            ` : ""}
           </div>
         </div>
 
@@ -873,28 +971,32 @@ function renderGlucoseChart(series, axis) {
   }
 
   // 横轴基于完整任务窗口，避免流式加载时蓝/黄区域长度跳动。
-  const minValue = Math.min(...displayedSeries.map(point => point.value));
-  const maxValue = Math.max(...displayedSeries.map(point => point.value));
+  const minValue = Math.min(...series.map(point => point.value));
+  const maxValue = Math.max(...series.map(point => point.value));
   const minMinute = axis?.min_minutes ?? Math.min(...series.map(point => point.minute));
   const maxMinute = axis?.max_minutes ?? Math.max(...series.map(point => point.minute));
   
   const minuteSpan = Math.max(maxMinute - minMinute, 1);
   const valueSpan = Math.max(maxValue - minValue, 0.1);
-  const yPadding = Math.max(valueSpan * 0.18, 0.4);
+  const yPadding = Math.max(valueSpan * 0.12, 0.25);
   const lower = minValue - yPadding;
   const upper = maxValue + yPadding;
-  const xAt = (minute) => 72 + ((minute - minMinute) / minuteSpan) * 688;
-  const yAt = (value) => 224 - ((value - lower) / (upper - lower)) * 174;
+  const plotLeft = 42;
+  const plotRight = 806;
+  const plotTop = 16;
+  const plotBottom = 252;
+  const xAt = (minute) => plotLeft + ((minute - minMinute) / minuteSpan) * (plotRight - plotLeft);
+  const yAt = (value) => plotBottom - ((value - lower) / (upper - lower)) * (plotBottom - plotTop);
   const ticks = [lower, lower + (upper - lower) / 3, lower + ((upper - lower) * 2) / 3, upper];
   const timeMarks = axis?.time_marks || series.map(point => point.minute);
   const timeLabels = axis?.time_labels || series.map((point) => point.time_label || glucoseMinuteLabel(point.minute));
   const eventMap = new Map((axis?.events || []).map((event) => [event.minute, event]));
   const regionBounds = getGlucoseRegionBounds(series, axis);
-  const regionTop = 30;
-  const regionBottom = 224;
+  const regionTop = plotTop;
+  const regionBottom = plotBottom;
   const regionRect = (leftMinute, rightMinute, className) => {
-    const left = Math.max(xAt(leftMinute), 72);
-    const right = Math.min(xAt(rightMinute), 792);
+    const left = Math.max(xAt(leftMinute), plotLeft);
+    const right = Math.min(xAt(rightMinute), plotRight);
     const width = Math.max(right - left, 0);
     return width > 0
       ? `<rect x="${left}" y="${regionTop}" width="${width}" height="${regionBottom - regionTop}" rx="16" class="glucose-region ${className}"/>`
@@ -917,9 +1019,9 @@ function renderGlucoseChart(series, axis) {
       line: nextDisplayed ? `<line x1="${x}" y1="${y}" x2="${xAt(nextDisplayed.minute)}" y2="${yAt(nextDisplayed.value)}" stroke="${lineColor}" stroke-width="3.5" fill="none" opacity="0.96" ${dashed ? 'stroke-dasharray="10 8"' : ''}/>` : '',
       symbol: glucosePointSymbol(point, x, y),
       labels: `
-        <text x="${x}" y="${y - 16}" class="glucose-point-label" text-anchor="middle">${point.value.toFixed(1)}</text>
-        ${point.kind === 'meal' || point.kind.startsWith('outcome') ? `<text x="${x}" y="${y + 39}" class="glucose-point-state" text-anchor="middle">${glucoseKindLabel(point.kind)}</text>` : ''}
-        ${eventMap.has(point.minute) ? `<text x="${x}" y="${y + 54}" class="glucose-point-state" text-anchor="middle">${eventMap.get(point.minute).label}</text>` : ''}
+        <text x="${x}" y="${y - 9}" class="glucose-point-label" text-anchor="middle">${point.value.toFixed(1)}</text>
+        ${point.kind === 'meal' || point.kind.startsWith('outcome') ? `<text x="${x}" y="${y + 27}" class="glucose-point-state" text-anchor="middle">${glucoseKindLabel(point.kind)}</text>` : ''}
+        ${eventMap.has(point.minute) ? `<text x="${x}" y="${y + 40}" class="glucose-point-state" text-anchor="middle">${eventMap.get(point.minute).label}</text>` : ''}
       `
     };
   });
@@ -927,19 +1029,19 @@ function renderGlucoseChart(series, axis) {
   return `
     <div class="glucose-chart-shell">
       <div class="glucose-chart-container" id="glucoseChartContainer" style="touch-action: pan-y; user-select: none;">
-        <svg class="glucose-chart" viewBox="0 0 820 300" preserveAspectRatio="xMidYMid meet" style="cursor: grab; transition: transform 0.05s linear;">
+        <svg class="glucose-chart" viewBox="0 0 820 286" preserveAspectRatio="xMidYMid meet" style="cursor: grab; transition: transform 0.05s linear;">
           ${regionRect(minMinute, regionBounds.decisionStart, "glucose-region-history")}
           ${regionRect(regionBounds.decisionStart, regionBounds.decisionEnd, "glucose-region-history")}
           ${regionRect(regionBounds.decisionEnd, maxMinute, "glucose-region-future")}
 
-          <line x1="72" y1="30" x2="72" y2="225" stroke="var(--border)" stroke-width="2"/>
-          <line x1="72" y1="224" x2="792" y2="224" stroke="var(--border)" stroke-width="2"/>
+          <line x1="${plotLeft}" y1="${plotTop}" x2="${plotLeft}" y2="${plotBottom + 1}" stroke="var(--border)" stroke-width="2"/>
+          <line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="var(--border)" stroke-width="2"/>
 
           ${ticks.map((tick) => {
             const y = yAt(tick);
             return `
-              <line x1="62" y1="${y}" x2="72" y2="${y}" stroke="var(--border)" stroke-width="1.2"/>
-              <text x="56" y="${y + 4}" font-size="12" text-anchor="end" fill="var(--muted)">${tick.toFixed(1)}</text>
+              <line x1="${plotLeft - 8}" y1="${y}" x2="${plotLeft}" y2="${y}" stroke="var(--border)" stroke-width="1.2"/>
+              <text x="${plotLeft - 12}" y="${y + 4}" font-size="10" text-anchor="end" fill="var(--muted)">${tick.toFixed(1)}</text>
             `;
           }).join("")}
 
@@ -949,8 +1051,8 @@ function renderGlucoseChart(series, axis) {
             const opacity = isHidden ? 0.2 : 1;
             const timeLabel = timeLabels[timeMarks.indexOf(minute)] || glucoseMinuteLabel(minute);
             return `
-              <line x1="${x}" y1="224" x2="${x}" y2="230" stroke="var(--border)" stroke-width="1" opacity="${opacity}"/>
-              <text x="${x}" y="246" font-size="11" text-anchor="middle" fill="var(--muted)" opacity="${opacity}">${timeLabel}</text>
+              <line x1="${x}" y1="${plotBottom}" x2="${x}" y2="${plotBottom + 5}" stroke="var(--border)" stroke-width="1" opacity="${opacity}"/>
+              <text x="${x}" y="${plotBottom + 20}" font-size="9.5" text-anchor="middle" fill="var(--muted)" opacity="${opacity}">${timeLabel}</text>
             `;
           }).join("")}
 

@@ -342,10 +342,10 @@ button {
 
 .glucose-chart-shell {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 6px;
   border: 2px solid var(--light);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #ffffff;
 }
 
@@ -427,7 +427,7 @@ button {
   height: 100%;
   border: 2px solid var(--light);
   border-radius: 8px;
-  padding: 20px;
+  padding: 4px;
   background: #ffffff;
   display: flex;
   flex-direction: column;
@@ -450,7 +450,7 @@ button {
 .glucose-chart {
   width: 100%;
   height: 100%;
-  min-height: 220px;
+  min-height: 240px;
 }
 
 .point-history { fill: rgba(30, 64, 175, 0.86); stroke: rgba(255, 255, 255, 0.96); stroke-width: 1.5; }
@@ -471,14 +471,36 @@ button {
 .glucose-region-future { fill: rgba(245, 158, 11, 0.18); }
 
 .glucose-point-label {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 700;
   fill: var(--muted);
 }
 
 .glucose-point-state {
-  font-size: 15px;
+  font-size: 10px;
   fill: var(--muted);
+}
+
+.decision-impact-summary {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.07);
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.decision-impact-summary .impact-title {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.decision-impact-summary .impact-note {
+  color: var(--muted);
+  font-size: 17px;
 }
 
 .glucose-summary-grid {
