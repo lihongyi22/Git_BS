@@ -432,7 +432,7 @@ function renderTraining() {
           <div class="survey-header"><h2>决策操作与信心评分培训</h2><div class="survey-section-marker">请实际点击一次选项并提交一次信心评分</div></div>
           <div class="survey-content">
             <div class="question-card"><div class="question-text">请根据当前血糖情况，选择您认为最合适的运动方案</div><div class="scale-hint">选择后，系统会显示这个选择预计对您血糖的影响。例如选择快走1公里后，点击确认。</div></div>
-            <div class="choice-grid">${actionOptions.map(opt => `<button class="choice-btn ${practiceAction === opt.code ? "active" : ""} ${opt.code === "A" ? "training-highlight" : ""}" data-practice-action="${opt.code}"><div>选项${opt.code}</div><div>${opt.label}</div></button>`).join("")}</div>
+            <div class="choice-grid">${actionOptions.map(opt => `<button class="choice-btn ${practiceAction === opt.code ? "active" : ""} ${opt.code === "A" && !practiceAction ? "training-highlight" : ""}" data-practice-action="${opt.code}"><div>选项${opt.code}</div><div>${opt.label}</div></button>`).join("")}</div>
             <div class="confidence-box"><div class="confidence-title">选择完成后，请评估您对这个决策正确程度的信心</div><div class="scale-hint">1分=完全没把握，5分=非常有把握</div><div class="confidence-buttons">${[1,2,3,4,5].map(n => `<button class="conf-btn ${practiceConfidence === n ? "active" : ""}" data-practice-conf="${n}"><div class="conf-value">${n}</div></button>`).join("")}</div></div>
           </div>
           <div class="survey-footer"><button class="primary" id="finishPractice">确认练习选择</button></div>
