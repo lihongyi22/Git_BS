@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import random
 
@@ -15,16 +14,27 @@ from app.services.glucose_story import build_glucose_story_from_extended_data
 router = APIRouter(prefix="/api/experiment", tags=["experiment"])
 
 
-def _trial_glucose_sample_index(subject_id: str, trial_index: int, scenario_type: str, instance_id: int) -> int:
-    key = f"{subject_id}:{trial_index}:{scenario_type}:{instance_id}"
-    digest = hashlib.sha256(key.encode("utf-8")).digest()
-    return int.from_bytes(digest[:4], "big") % 4
+def _trial_glucose_sample_index(condition_code: str | None, scenario_type: str, instance_id: int) -> int:
+    """Map each experimental condition instance to a fixed glucose sample.
+
+    Latin-square rows only change order; the curve shown for a condition must
+    not depend on subject id or trial index. Four samples per scenario cover:
+    expert/peer style x instance 1/2.
+    """
+    code = condition_code or ""
+    instance_offset = 0 if int(instance_id or 1) == 1 else 1
+    if scenario_type == "short_peak":
+        base = {"P": 0, "R": 2}.get(code, 0)
+    elif scenario_type == "sustained_high":
+        base = {"Q": 0, "S": 2}.get(code, 0)
+    else:
+        base = 0
+    return (base + instance_offset) % 4
 
 
 def _baseline_story_from_file(subject_id: str, trial: dict) -> dict | None:
     sample_index = _trial_glucose_sample_index(
-        subject_id,
-        trial["trial_index"],
+        trial["condition_code"] or trial["condition_id"],
         trial["scenario_type"],
         trial["instance_id"],
     )
@@ -330,7 +340,7 @@ def get_glucose_outcome(subject_id: str, trial_index: int, action_code: str, sam
     """
     with get_conn() as conn:
         trial = conn.execute(
-            "SELECT trial_index, scenario_type, instance_id FROM trial_plans WHERE subject_id = ? AND trial_index = ?",
+            "SELECT trial_index, condition_id, condition_code, scenario_type, instance_id FROM trial_plans WHERE subject_id = ? AND trial_index = ?",
             (subject_id, trial_index),
         ).fetchone()
         if not trial:
@@ -342,7 +352,7 @@ def get_glucose_outcome(subject_id: str, trial_index: int, action_code: str, sam
         raise HTTPException(status_code=400, detail="sample_index must be between 0 and 3")
 
     scenario_type = trial["scenario_type"]
-    sample_index = _trial_glucose_sample_index(subject_id, trial["trial_index"], scenario_type, trial["instance_id"])
+    sample_index = _trial_glucose_sample_index(trial["condition_code"] or trial["condition_id"], scenario_type, trial["instance_id"])
     
     # Load extended glucose data from file
     glucose_story = build_glucose_story_from_extended_data(scenario_type, action_code, sample_index)
