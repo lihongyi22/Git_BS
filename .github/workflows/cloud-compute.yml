@@ -1,0 +1,24 @@
+name: Cloud Compute
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "compute.py"
+      - "tasks/**/*.json"
+      - ".github/workflows/cloud-compute.yml"
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run cloud compute tasks
+        run: python compute.py tasks/sample_tasks.json

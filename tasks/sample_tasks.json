@@ -1,0 +1,5 @@
+[
+  { "id": "job-1", "expression": "2 + 3 * 4" },
+  { "id": "job-2", "expression": "(10 - 3) / 7" },
+  { "id": "job-3", "expression": "2 ** 8 + 1" }
+]
